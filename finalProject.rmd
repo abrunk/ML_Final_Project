@@ -1,0 +1,107 @@
+---
+title: "Machine Learning Final Project"
+author: "ABrunk"
+date: "October 29, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Loading Data and Packages
+
+First, load in data and required packages
+
+```{r message=FALSE,warning=FALSE}
+library(readr)
+library(caret)
+library(randomForest)
+
+pml_training <- read_csv("pml-training.csv")
+pml_testing <- read_csv("pml-testing.csv")
+```
+
+## Data Cleaning / Pre-Processing
+
+Next, take a few steps to clean the data.  Identify variables that are mostly NAs, and any that are not present in the testing data set.
+
+```{r message=FALSE,warning=FALSE}
+na_count <- sapply(pml_training, function(x)sum(length(which(is.na(x)))))
+na_count <- data.frame(na_count)
+
+pml_varlist<-cbind(sapply(pml_testing, function(x)all(is.na(x))),
+                   sapply(pml_training, function(x)all(is.na(x))),
+                   na_count)
+
+names(pml_varlist) <- c("testing","training","training.na")
+```
+
+Remove all variables that aren't part of the test set, as well as all unique identifier variables.
+
+```{r message=FALSE,warning=FALSE}
+training <- pml_training[,pml_varlist[,1]==FALSE]
+training <- subset(training,select=-c(X1,user_name,raw_timestamp_part_1,raw_timestamp_part_2,cvtd_timestamp,new_window))
+training$classe <- as.factor(training$classe)
+```
+
+Next, get rid of any rows that have na values
+
+```{r message=FALSE,warning=FALSE}
+training <- subset(training,complete.cases(training))
+training <- na.omit(training)
+```
+
+Finally, split the training data set into a new training and validation data set.
+
+```{r message=FALSE,warning=FALSE}
+inTrain = createDataPartition(training$classe, p = .75)[[1]]
+my_train = training[ inTrain,]
+my_test = training[-inTrain,]
+```
+
+## Model Creation & Testing
+
+Our next steps will involve creating a few different models to see how accurate they are at predicting the classe variable.
+
+Because the outcome variable `classe` is a categorical variable, we cannot. use linear or logistic regression.  We will try a linear discrimanent model, a gradient boosting model, and a random forest model.
+
+#### Linear Discriminant Model
+
+```{r message=FALSE,warning=FALSE}
+lda_model <- train(classe~.,data=my_train,method="lda")
+lda_predict <- predict(lda_model,newdata=my_test)
+confusionMatrix(table(lda_predict,my_test$classe))
+```
+
+#### Gradient Boosting Model
+
+```{r message=FALSE,warning=FALSE,results="hide"}
+gbm_model <- train(classe~.,data=my_train,method="gbm")
+```
+
+```{r message=FALSE,warning=FALSE}
+gbm_predict <- predict(gbm_model,newdata=my_test)
+confusionMatrix(table(gbm_predict,my_test$classe))
+```
+
+#### Random Forest Model
+
+```{r message=FALSE,warning=FALSE}
+rf_model <- randomForest(classe~.,data=my_train)
+rf_predict <- predict(rf_model,newdata=my_test)
+confusionMatrix(table(rf_predict,my_test$classe))
+```
+
+Looking at the three models, the LDA model has an accuracy rating of only .71, while the GBA is .98 and the Random Forest is .996.  Since the Random Forest is the most accurate of the three models, we will go with this one for constructing the final model.
+
+## Final Model
+
+The final model returns to using the full training set, and then predicts the `classe` values for the twenty rows in the testing set.
+
+```{r message=FALSE,warning=FALSE}
+final_model <- randomForest(classe~.,data=training)
+predict_final <- predict(final_model,newdata=pml_testing)
+testing_predicted <- pml_testing
+testing_predicted$classe <- predict_final
+```
