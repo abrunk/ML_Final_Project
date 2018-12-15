@@ -59,15 +59,7 @@ training <- subset(training,complete.cases(training))
 training <- na.omit(training)
 ```
 
-Now that we have a clean data set, we have an opportunity to do some exploratory data analysis.  First, we build a correlation matrix.
-
-```{r message=FALSE,warning=FALSE}
-cor_training <- cor(training[2:53])
-cor_training[apply(cor_training, 1, function(row) {all((row > .9 | row < -.9) & row != 1)}),]
-corrplot(cor_training,type="lower")
-```
-
-Because there are so many variables, the correlation matrix is hard to interpret.  Next, we do a principle components analysis to further explore the data.
+Now that we have a clean data set, we have an opportunity to do some exploratory data analysis.  Next, we do a principle components analysis to further explore the data.
 
 ```{r message=FALSE,warning=FALSE}
 library(stats)
