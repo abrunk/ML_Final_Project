@@ -2,7 +2,10 @@
 title: "Machine Learning Final Project"
 author: "ABrunk"
 date: "October 29, 2018"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -17,6 +20,10 @@ First, load in data and required packages
 library(readr)
 library(caret)
 library(randomForest)
+library(rattle)
+library(rpart.plot)
+library(AppliedPredictiveModeling)
+library(corrplot)
 
 pml_training <- read_csv("pml-training.csv")
 pml_testing <- read_csv("pml-testing.csv")
@@ -45,12 +52,30 @@ training <- subset(training,select=-c(X1,user_name,raw_timestamp_part_1,raw_time
 training$classe <- as.factor(training$classe)
 ```
 
-Next, get rid of any rows that have na values
+Next, get rid of any rows that have na values.
 
 ```{r message=FALSE,warning=FALSE}
 training <- subset(training,complete.cases(training))
 training <- na.omit(training)
 ```
+
+Now that we have a clean data set, we have an opportunity to do some exploratory data analysis.  First, we build a correlation matrix.
+
+```{r message=FALSE,warning=FALSE}
+cor_training <- cor(training[2:53])
+cor_training[apply(cor_training, 1, function(row) {all((row > .9 | row < -.9) & row != 1)}),]
+corrplot(cor_training,type="lower")
+```
+
+Because there are so many variables, the correlation matrix is hard to interpret.  Next, we do a principle components analysis to further explore the data.
+
+```{r message=FALSE,warning=FALSE}
+library(stats)
+training_pca <- prcomp(training[2:53], center = TRUE, scale = TRUE) 
+biplot(training_pca)
+```
+
+It appears that the principle components do segment the variables into five relatively distinct groupings.
 
 Finally, split the training data set into a new training and validation data set.
 
@@ -64,7 +89,7 @@ my_test = training[-inTrain,]
 
 Our next steps will involve creating a few different models to see how accurate they are at predicting the classe variable.
 
-Because the outcome variable `classe` is a categorical variable, we cannot. use linear or logistic regression.  We will try a linear discrimanent model, a gradient boosting model, and a random forest model.
+Because the outcome variable `classe` is a categorical variable, we cannot use linear or logistic regression.  We will try a linear discrimanent model and a random forest model.
 
 #### Linear Discriminant Model
 
@@ -74,26 +99,25 @@ lda_predict <- predict(lda_model,newdata=my_test)
 confusionMatrix(table(lda_predict,my_test$classe))
 ```
 
-#### Gradient Boosting Model
-
-```{r message=FALSE,warning=FALSE,results="hide"}
-gbm_model <- train(classe~.,data=my_train,method="gbm")
-```
-
-```{r message=FALSE,warning=FALSE}
-gbm_predict <- predict(gbm_model,newdata=my_test)
-confusionMatrix(table(gbm_predict,my_test$classe))
-```
-
 #### Random Forest Model
 
 ```{r message=FALSE,warning=FALSE}
 rf_model <- randomForest(classe~.,data=my_train)
+print(rf_model)
+```
+
+Above we have the in-sample error rate.  Now we will check the out-of-sample error rate by cross-validating on the test data that we have held back.
+
+```{r message=FALSE,warning=FALSE}
 rf_predict <- predict(rf_model,newdata=my_test)
 confusionMatrix(table(rf_predict,my_test$classe))
 ```
 
-Looking at the three models, the LDA model has an accuracy rating of only .71, while the GBA is .98 and the Random Forest is .996.  Since the Random Forest is the most accurate of the three models, we will go with this one for constructing the final model.
+The above cross-validation for the Random Forest model indicates an out-of-sample error rate of around 0.004 or .4%.
+
+Looking at the two models, the LDA model has an accuracy rating of only .71, while the Random Forest is .996.   
+
+Since the Random Forest is the more accurate of the two models, we will go with this one for constructing the final model. 
 
 ## Final Model
 
@@ -104,4 +128,5 @@ final_model <- randomForest(classe~.,data=training)
 predict_final <- predict(final_model,newdata=pml_testing)
 testing_predicted <- pml_testing
 testing_predicted$classe <- predict_final
+print(testing_predicted$classe)
 ```
